@@ -9,7 +9,7 @@ namespace EfficientDynamoDb.Configs.Http
         
         private readonly HttpClient _httpClient;
 
-        private DefaultHttpClientFactory()
+        public DefaultHttpClientFactory()
         {
             _httpClient = new HttpClient(new HttpClientHandler
             {

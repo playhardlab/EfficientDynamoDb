@@ -11,10 +11,14 @@ using Microsoft.IO;
 
 namespace EfficientDynamoDb.Internal
 {
-    internal class HttpApi
+    public class HttpApi
     {
         private readonly IHttpClientFactory _httpClientFactory;
 
+        public HttpApi()
+        {
+            _httpClientFactory = new DefaultHttpClientFactory();
+        }
         public HttpApi(IHttpClientFactory httpClientFactory)
         {
             _httpClientFactory = httpClientFactory;
