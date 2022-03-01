@@ -2,6 +2,7 @@ using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using EfficientDynamoDb.Converters;
@@ -12,8 +13,8 @@ namespace EfficientDynamoDb.Internal.Operations.Shared
     internal abstract class DynamoDbHttpContent : HttpContent
     {
         internal static readonly RecyclableMemoryStreamManager MemoryStreamManager = new RecyclableMemoryStreamManager();
-        private static readonly JsonWriterOptions JsonWriterOptions = new JsonWriterOptions {SkipValidation = true};
-        
+        private static readonly JsonWriterOptions JsonWriterOptions = new JsonWriterOptions { SkipValidation = true };
+
         private MemoryStream? _pooledContentStream;
 
         protected DynamoDbHttpContent(string amzTarget)
@@ -30,11 +31,11 @@ namespace EfficientDynamoDb.Internal.Operations.Shared
         protected override void Dispose(bool disposing)
         {
             base.Dispose(disposing);
-            
-            if(disposing)
+
+            if (disposing)
                 _pooledContentStream?.Dispose();
         }
-        
+
         private async Task<Stream> CreatePooledContentReadStreamAsync()
         {
             if (_pooledContentStream != null)
@@ -55,7 +56,7 @@ namespace EfficientDynamoDb.Internal.Operations.Shared
                 await _pooledContentStream.CopyToAsync(stream).ConfigureAwait(false);
                 return;
             }
-            
+
             // Pooled buffer may seems redundant while reviewing current method, but when passed to json writer it completely changes the write logic.
             // Instead of reallocating new in-memory arrays when json size grows and Flush is not called explicitly - it now uses pooled buffer.
             // With proper flushing logic amount of buffer growths/copies should be zero and amount of memory allocations should be zero as well.
@@ -80,5 +81,64 @@ namespace EfficientDynamoDb.Internal.Operations.Shared
         /// Write implementations of <see cref="IAttributeValue"/> continue to be synchronous and in general are not expected to produce JSON bigger than 16KB.
         /// </summary>
         protected abstract ValueTask WriteDataAsync(DdbWriter writer);
+    }
+
+
+    public class DynamoDbContent : HttpContent
+    {
+        internal static readonly RecyclableMemoryStreamManager MemoryStreamManager = new RecyclableMemoryStreamManager();
+        private static readonly JsonWriterOptions JsonWriterOptions = new JsonWriterOptions { SkipValidation = true };
+        private readonly string body;
+        private MemoryStream? _pooledContentStream;
+
+        
+        public DynamoDbContent(string amzTarget, string body)
+        {
+            Headers.Add("X-AMZ-Target", amzTarget);
+            Headers.ContentType = new MediaTypeHeaderValue("application/x-amz-json-1.0");
+            this.body = body;
+        }
+
+        protected override async Task<Stream> CreateContentReadStreamAsync()
+        {
+            if (_pooledContentStream != null)
+                return _pooledContentStream;
+
+            _pooledContentStream = MemoryStreamManager.GetStream();
+
+            await SerializeToStreamAsync(_pooledContentStream, null).ConfigureAwait(false);
+
+            _pooledContentStream.Position = 0;
+            return _pooledContentStream;
+
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            base.Dispose(disposing);
+
+            if (disposing)
+                _pooledContentStream?.Dispose();
+        }
+
+
+        protected override async Task SerializeToStreamAsync(Stream stream, TransportContext? context)
+        {
+            if (_pooledContentStream?.Length > 0)
+            {
+                await _pooledContentStream.CopyToAsync(stream).ConfigureAwait(false);
+                return;
+            }
+
+            var buffer = Encoding.UTF8.GetBytes(body);
+            await stream.WriteAsync(buffer,0, buffer.Length);
+        }
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = 0;
+            return false;
+        }
+
     }
 }
