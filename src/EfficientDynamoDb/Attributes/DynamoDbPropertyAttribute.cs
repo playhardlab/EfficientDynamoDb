@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.CompilerServices;
 // ReSharper disable IntroduceOptionalParameters.Global
 
 namespace EfficientDynamoDb.Attributes
@@ -10,8 +11,8 @@ namespace EfficientDynamoDb.Attributes
         public Type? DdbConverterType { get; }
         
         public DynamoDbAttributeType AttributeType { get; }
-
-        public DynamoDbPropertyAttribute(string name) : this(name, null, DynamoDbAttributeType.Regular)
+        
+        public DynamoDbPropertyAttribute([CallerMemberName]  string name="") : this(name, null, DynamoDbAttributeType.Regular)
         {
         }
 
